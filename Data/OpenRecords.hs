@@ -47,7 +47,7 @@ module Data.OpenRecords
              -- ** Disjoint union
               (.+) , (:+),
              -- * Row constraints
-             (:\), Disjoint, Labels(..), Forall(..),
+             (:\), Disjoint, Labels, Forall(..),
              -- * Row only operations
              -- * Syntactic sugar
              RecOp(..), RowOp(..), (.|), (:|)
@@ -332,14 +332,9 @@ type family (x :: RowOp *) :| (r :: Row *)  :: Row * where
 
 
 
-class Labels (r :: Row *) where
-  labels :: Rec r -> [String]
-
-instance Labels (R '[]) where
-  labels _ = []
-
-instance (KnownSymbol l , Labels (R t)) => Labels (R (l :-> v ': t)) where
-  labels r = show l : labels (r .- l) where l = Label :: Label l
+type family Labels (r :: Row a) where
+  Labels (R '[]) = '[]
+  Labels (R (l :-> a ': xs)) = l ': Labels (R xs)
 
 
 -- | If the constaint @c@ holds for all elements in the row @r@,
@@ -362,6 +357,12 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   -- apply the function to each pair of values that can be obtained by indexing the two records
   -- with the same label and collect the result in a list.
   eraseZip :: Proxy c -> (forall a. c a => a -> a -> b) -> Rec r -> Rec r -> [b]
+
+class Yes1 a
+instance Yes1 a
+
+labels :: IsString s => Forall r Yes1 => Rec r -> [s]
+labels = fmap fst . eraseWithLabels (Proxy @Yes1) (pure ())
 
 class RowMap (f :: * -> *) (r :: Row *) where
   type Map f r :: Row *
@@ -460,7 +461,7 @@ instance (KnownSymbol l, RZipt t1 t2) =>
 
 -- some standard type classes
 
-instance (Labels r, Forall r Show) => Show (Rec r) where
+instance (Forall r Show) => Show (Rec r) where
   show r = "{ " ++ intercalate ", " binds ++ " }"
     where binds = (\ (x, y) -> x ++ "=" ++ y) <$> eraseWithLabels (Proxy @Show) show r
 
