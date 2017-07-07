@@ -218,9 +218,8 @@ type family (l :: Row *) :+  (r :: Row *)  :: Row * where
 {--------------------------------------------------------------------
   Syntactic sugar for record operations
 --------------------------------------------------------------------}
--- | A constraint not constraining anything
-class NoConstr a 
-instance NoConstr a
+class Yes1 a
+instance Yes1 a
 
 -- | Alias for ':\'. It is a class rather than an alias, so that
 --   it can be partially appliced.
@@ -266,9 +265,9 @@ infix 5 :<-
 --  [@:<-!@] Record label renaming. Sugar for 'renameUnique'.
 data RecOp (c :: Row * -> Constraint) (rowOp :: RowOp *) where
   (:<-)  :: KnownSymbol l           => Label l -> a      -> RecOp (HasType l a) RUp
-  (:=)   :: KnownSymbol l           => Label l -> a      -> RecOp NoConstr (l ::= a)  
+  (:=)   :: KnownSymbol l           => Label l -> a      -> RecOp Yes1 (l ::= a)  
   (:!=)  :: KnownSymbol l => Label l -> a      -> RecOp (Lacks l) (l ::= a)  
-  (:<-|) :: (KnownSymbol l, KnownSymbol l') => Label l' -> Label l -> RecOp NoConstr (l' ::<-| l)
+  (:<-|) :: (KnownSymbol l, KnownSymbol l') => Label l' -> Label l -> RecOp Yes1 (l' ::<-| l)
   (:<-!) :: (KnownSymbol l, KnownSymbol l', r :\ l') => Label l' -> Label l -> RecOp (Lacks l') (l' ::<-| l)
 
 
@@ -357,9 +356,6 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   -- apply the function to each pair of values that can be obtained by indexing the two records
   -- with the same label and collect the result in a list.
   eraseZip :: Proxy c -> (forall a. c a => a -> a -> b) -> Rec r -> Rec r -> [b]
-
-class Yes1 a
-instance Yes1 a
 
 labels :: IsString s => Forall r Yes1 => Rec r -> [s]
 labels = fmap fst . eraseWithLabels (Proxy @Yes1) (pure ())
