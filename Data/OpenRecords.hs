@@ -27,6 +27,7 @@ module Data.OpenRecords
              Label(..),
              KnownSymbol(..),
              Rec,   Row,
+             HasType(..),
              -- * Construction
              empty,Empty ,
              -- ** Extension
