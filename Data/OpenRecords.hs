@@ -60,6 +60,9 @@ module Data.OpenRecords
      ) 
 where
 
+import Control.Monad.Identity (Identity(..))
+import Data.Functor.Const (Const(..))
+
 import Data.Hashable
 import Data.HashMap.Lazy(HashMap)
 import Data.Sequence(Seq,viewl,ViewL(..),(><),(<|))
@@ -349,6 +352,47 @@ type family Labels (r :: Row a) where
   Labels (R '[]) = '[]
   Labels (R (l :-> a ': xs)) = l ': Labels (R xs)
 
+-- | Ability to fold on a set of labels as if it were a list.
+-- NOTE: Everything inside of the @Forall@ class can be defined in terms of
+-- this class.
+-- This class also makes it easy to implement @labelsOf@ without needing to
+-- construct an record and then gets its values.
+--
+-- The technique being used here is described here:
+--   https://gmalecha.github.io/reflections/2017/pattern-matching-on-data-kinds
+--
+class ForallX (r :: Row *) (c :: * -> Constraint) where
+  foldLabels :: forall (f :: Row * -> *).
+                f Empty
+             -> (forall ℓ τ ρ. (KnownSymbol ℓ, c τ) => f ('R ρ) -> f ('R (ℓ :-> τ ': ρ)))
+             -> f r
+
+instance ForallX (R '[]) c where
+  foldLabels x _ = x
+
+instance (KnownSymbol ℓ, c τ, ForallX ('R ρ) c) => ForallX ('R (ℓ :-> τ ': ρ)) c where
+  foldLabels empty cons = cons @ℓ @τ @ρ $ foldLabels @('R ρ) @c @_ empty cons
+
+rinitA' :: forall f ρ c. (Applicative f, ForallX ρ c)
+        => Proxy c -> (forall a. c a => f a) -> f (Rec ρ)
+rinitA' _ mk = unTrinitA $ foldLabels @ρ @c @(TrinitA f) doNil doCons
+  where doNil :: TrinitA f Empty
+        doNil = TrinitA $ pure empty
+        doCons :: forall ℓ τ ρ. (KnownSymbol ℓ, c τ)
+               => TrinitA f ('R ρ) -> TrinitA f ('R (ℓ :-> τ ': ρ))
+        doCons (TrinitA r) = TrinitA $ unsafeInjectFront (Label @ℓ) <$> mk @τ <*> r
+
+newtype TrinitA (f :: * -> *) (ρ :: Row *) = TrinitA { unTrinitA :: f (Rec ρ) }
+
+rinit' :: ForallX r c => Proxy c -> (forall a. c a => a) -> Rec r
+rinit' p mk = runIdentity $ rinitA' p $ pure mk
+
+-- | Return a list of the labels in a record type.
+labelsOf :: forall s ρ c. (IsString s, ForallX ρ c) => [s]
+labelsOf = getConst $ foldLabels @ρ @c @(Const [s]) (Const []) doCons
+  where doCons :: forall ℓ τ ρ. (KnownSymbol ℓ, c τ)
+               => Const [s] ('R ρ) -> Const [s] ('R (ℓ :-> τ ': ρ))
+        doCons (Const c) = Const $ fromString (symbolVal @ℓ Proxy) : c
 
 -- | If the constaint @c@ holds for all elements in the row @r@,
 --  then the methods in this class are available.
