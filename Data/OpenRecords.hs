@@ -363,51 +363,47 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   -- with the same label and collect the result in a list.
   eraseZip :: Proxy c -> (forall a. c a => a -> a -> b) -> Rec r -> Rec r -> [b]
 
-class RowMap (f :: * -> *) (r :: Row *) where
-  type Map f r :: Row *
+type family Map (f :: a -> b) (r :: Row a) :: Row b where Map f (R r) = R (RM f r)
+
+class RowMap (r :: Row *) where
   rmap :: Proxy f -> (forall a.  a -> f a) -> Rec r -> Rec (Map f r)
   rsequence :: Applicative f => Proxy f -> Rec (Map f r) -> f (Rec r)
 
-instance RowMapx f r => RowMap f (R r) where
-  type Map f (R r) = R (RM f r)
+instance RowMapx r => RowMap (R r) where
   rmap = rmap'
   rsequence = rsequence'
 
-class RowMapx (f :: * -> *) (r :: [LT *]) where
-  type RM f r :: [LT *]
+type family RM (f :: a -> b) (r :: [LT a]) :: [LT b] where
+  RM f '[] = '[]
+  RM f (l :-> v ': t) = l :-> f v ': RM f t
+
+class RowMapx (r :: [LT *]) where
   rmap' :: Proxy f -> (forall a.  a -> f a) -> Rec (R r) -> Rec (R (RM f r))
   rsequence' :: Applicative f => Proxy f -> Rec (R (RM f r)) -> f (Rec (R r))
 
-instance RowMapx f '[] where
-  type RM f '[] = '[]
+instance RowMapx '[] where
   rmap' _ _ _ = empty
   rsequence' _ _ = pure empty
 
-instance (KnownSymbol l,  RowMapx f t) => RowMapx f (l :-> v ': t) where
-  type RM f (l :-> v ': t) = l :-> f v ': RM f t
+instance (KnownSymbol l,  RowMapx t) => RowMapx (l :-> v ': t) where
   rmap' w f r = unsafeInjectFront l (f (r .! l)) (rmap' w f (r .- l))
     where l = Label :: Label l
   rsequence' w r = unsafeInjectFront l <$> r .! l <*> rsequence' w (r .- l)
     where l = Label :: Label l
 
-class RowMapC (c :: * -> Constraint) (f :: * -> *) (r :: Row *) where
-  type MapC c f r :: Row *
-  rmapc :: Proxy c -> Proxy f -> (forall a. c a => a -> f a) -> Rec r -> Rec (MapC c f r)
+class RowMapC (c :: * -> Constraint) (r :: Row *) where
+  rmapc :: Proxy c -> Proxy f -> (forall a. c a => a -> f a) -> Rec r -> Rec (Map f r)
 
-instance RMapc c f r => RowMapC c f (R r) where
-  type MapC c f (R r) = R (RMapp c f r)
+instance RMapc c r => RowMapC c (R r) where
   rmapc = rmapc'
 
-class RMapc (c :: * -> Constraint) (f :: * -> *) (r :: [LT *]) where
-  type RMapp c f r :: [LT *]
-  rmapc' :: Proxy c -> Proxy f -> (forall a. c a => a -> f a) -> Rec (R r) -> Rec (R (RMapp c f r))
+class RMapc (c :: * -> Constraint) (r :: [LT *]) where
+  rmapc' :: Proxy c -> Proxy f -> (forall a. c a => a -> f a) -> Rec (R r) -> Rec (R (RM f r))
 
-instance RMapc c f '[] where
-  type RMapp c f '[] = '[]
+instance RMapc c '[] where
   rmapc' _ _ _ _ = empty
 
-instance (KnownSymbol l, c v, RMapc c f t) => RMapc c f (l :-> v ': t) where
-  type RMapp c f (l :-> v ': t) = l :-> f v ': RMapp c f t
+instance (KnownSymbol l, c v, RMapc c t) => RMapc c (l :-> v ': t) where
   rmapc' c w f r = unsafeInjectFront l (f (r .! l)) (rmapc' c w f (r .- l))
     where l = Label :: Label l
 
