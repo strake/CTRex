@@ -50,7 +50,7 @@ module Data.OpenRecords
              -- * Row constraints
              (:\), Disjoint, Labels, Forall(..),
              -- * Row only operations
-             Map, RowMap (..), RowZip (..),
+             Map, RowMap (..), RowZip (..), rmap,
              -- * Syntactic sugar
              RecOp(..), RowOp(..), (.|), (:|),
              -- * Labels
@@ -377,14 +377,15 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
 labels :: forall r s . (Forall r Unconstrained1, IsString s) => Proxy r -> [s]
 labels _ = getConst $ rinitAWithLabel @r (Proxy @Unconstrained1) (Const . pure . show')
 
+rmap :: Forall r Unconstrained1 => (forall a. a -> f a) -> Rec r -> Rec (Map f r)
+rmap = rmapc (Proxy @Unconstrained1)
+
 type family Map (f :: a -> b) (r :: Row a) :: Row b where Map f (R r) = R (RM f r)
 
 class RowMap (r :: Row *) where
-  rmap :: (forall a. a -> f a) -> Rec r -> Rec (Map f r)
   rsequence :: Applicative f => Rec (Map f r) -> f (Rec r)
 
 instance RowMapx r => RowMap (R r) where
-  rmap = rmap'
   rsequence = rsequence'
 
 type family RM (f :: a -> b) (r :: [LT a]) :: [LT b] where
@@ -392,16 +393,12 @@ type family RM (f :: a -> b) (r :: [LT a]) :: [LT b] where
   RM f (l :-> v ': t) = l :-> f v ': RM f t
 
 class RowMapx (r :: [LT *]) where
-  rmap' :: (forall a. a -> f a) -> Rec (R r) -> Rec (R (RM f r))
   rsequence' :: Applicative f => Rec (R (RM f r)) -> f (Rec (R r))
 
 instance RowMapx '[] where
-  rmap' _ _ = empty
   rsequence' _ = pure empty
 
 instance (KnownSymbol l,  RowMapx t) => RowMapx (l :-> v ': t) where
-  rmap' f r = unsafeInjectFront l (f (r .! l)) (rmap' f (r .- l))
-    where l = Label :: Label l
   rsequence' r = unsafeInjectFront l <$> r .! l <*> rsequence' (r .- l)
     where l = Label :: Label l
 
