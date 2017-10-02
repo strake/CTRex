@@ -16,6 +16,7 @@ Library
   Build-Depends: base >= 2 && < 6,
                  containers,
                  hashable >= 1.2,
+                 unconstrained >= 0.1.0.1,
                  unordered-containers >= 0.2
   Exposed-modules: Data.OpenRecords
   other-modules:
