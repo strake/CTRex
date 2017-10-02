@@ -37,7 +37,8 @@ Library
               TypeFamilies,
               TypeOperators,
               ViewPatterns,
-              UndecidableInstances
+              UndecidableInstances,
+              UnicodeSyntax
 
 source-repository head
     type:     git
