@@ -371,7 +371,7 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   -- with the same label and collect the result in a list.
   eraseZip :: Proxy c -> (forall a. c a => a -> a -> b) -> Rec r -> Rec r -> [b]
 
-  rmapc :: Proxy c -> Proxy f -> (forall a. c a => a -> f a) -> Rec r -> Rec (Map f r)
+  rmapc :: Proxy c -> (forall a. c a => a -> f a) -> Rec r -> Rec (Map f r)
 
 labels :: forall r s . (Forall r Unconstrained1, IsString s) => Proxy r -> [s]
 labels _ = getConst $ rinitAWithLabel @r (Proxy @Unconstrained1) (Const . pure . show')
@@ -379,8 +379,8 @@ labels _ = getConst $ rinitAWithLabel @r (Proxy @Unconstrained1) (Const . pure .
 type family Map (f :: a -> b) (r :: Row a) :: Row b where Map f (R r) = R (RM f r)
 
 class RowMap (r :: Row *) where
-  rmap :: Proxy f -> (forall a.  a -> f a) -> Rec r -> Rec (Map f r)
-  rsequence :: Applicative f => Proxy f -> Rec (Map f r) -> f (Rec r)
+  rmap :: (forall a. a -> f a) -> Rec r -> Rec (Map f r)
+  rsequence :: Applicative f => Rec (Map f r) -> f (Rec r)
 
 instance RowMapx r => RowMap (R r) where
   rmap = rmap'
@@ -391,17 +391,17 @@ type family RM (f :: a -> b) (r :: [LT a]) :: [LT b] where
   RM f (l :-> v ': t) = l :-> f v ': RM f t
 
 class RowMapx (r :: [LT *]) where
-  rmap' :: Proxy f -> (forall a.  a -> f a) -> Rec (R r) -> Rec (R (RM f r))
-  rsequence' :: Applicative f => Proxy f -> Rec (R (RM f r)) -> f (Rec (R r))
+  rmap' :: (forall a. a -> f a) -> Rec (R r) -> Rec (R (RM f r))
+  rsequence' :: Applicative f => Rec (R (RM f r)) -> f (Rec (R r))
 
 instance RowMapx '[] where
-  rmap' _ _ _ = empty
-  rsequence' _ _ = pure empty
+  rmap' _ _ = empty
+  rsequence' _ = pure empty
 
 instance (KnownSymbol l,  RowMapx t) => RowMapx (l :-> v ': t) where
-  rmap' w f r = unsafeInjectFront l (f (r .! l)) (rmap' w f (r .- l))
+  rmap' f r = unsafeInjectFront l (f (r .! l)) (rmap' f (r .- l))
     where l = Label :: Label l
-  rsequence' w r = unsafeInjectFront l <$> r .! l <*> rsequence' w (r .- l)
+  rsequence' r = unsafeInjectFront l <$> r .! l <*> rsequence' (r .- l)
     where l = Label :: Label l
 
 instance Forall (R '[]) c where
@@ -410,7 +410,7 @@ instance Forall (R '[]) c where
   eraseWithLabels _ _ _ = []
   eraseToHashMap _ _ _ = M.empty
   eraseZip _ _ _ _ = []
-  rmapc _ _ _ _ = empty
+  rmapc _ _ _ = empty
 
 instance (KnownSymbol l, Forall (R t) c, c a) => Forall (R (l :-> a ': t)) c where
   rinit c f = unsafeInjectFront l f (rinit c f) where l = Label :: Label l
@@ -426,7 +426,8 @@ instance (KnownSymbol l, Forall (R t) c, c a) => Forall (R (l :-> a ': t)) c whe
   eraseZip c f x y = f (x .! l) (y .! l) : eraseZip c f (x .- l) (y .- l) where
     l = Label :: Label l
 
-  rmapc c w f r = unsafeInjectFront l (f (r .! l)) (rmapc c w f (r .- l))
+  rmapc :: ∀ f . Proxy c -> (forall a. c a => a -> f a) -> Rec (R (l :-> a ': t)) -> Rec (Map f (R (l :-> a ': t)))
+  rmapc c f r = unsafeInjectFront l (f (r .! l)) (rmapc @_ @_ @f c f (r .- l))
     where l = Label :: Label l
 
 show' :: (IsString s, Show a) => a -> s
