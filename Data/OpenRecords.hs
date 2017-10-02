@@ -49,6 +49,7 @@ module Data.OpenRecords
              -- * Row constraints
              (:\), Disjoint, Labels(..), Forall(..),
              -- * Row only operations
+             Map, RowMap (..),
              -- * Syntactic sugar
              RecOp(..), RowOp(..), (.|), (:|)
 
