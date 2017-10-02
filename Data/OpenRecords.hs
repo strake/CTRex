@@ -49,7 +49,7 @@ module Data.OpenRecords
              -- * Row constraints
              (:\), Disjoint, Labels, Forall(..),
              -- * Row only operations
-             Map, RowMap (..), rmap,
+             Map, RowMap (..), rmap, rxform,
              -- * Syntactic sugar
              RecOp(..), RowOp(..), (.|), (:|),
              -- * Labels
@@ -360,12 +360,16 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   eraseZip :: Proxy c -> (forall a. c a => a -> a -> b) -> Rec r -> Rec r -> [b]
 
   rmapc :: Proxy c -> (forall a. c a => a -> f a) -> Rec r -> Rec (Map f r)
+  rxformc :: Proxy c -> (forall a. c a => f a -> g a) -> Rec (Map f r) -> Rec (Map g r)
 
 labels :: forall r s . (Forall r Unconstrained1, IsString s) => Proxy r -> [s]
 labels _ = getConst $ rinitAWithLabel @r (Proxy @Unconstrained1) (Const . pure . show')
 
 rmap :: Forall r Unconstrained1 => (forall a. a -> f a) -> Rec r -> Rec (Map f r)
 rmap = rmapc (Proxy @Unconstrained1)
+
+rxform :: ∀ r f g . Forall r Unconstrained1 => (forall a. f a -> g a) -> Rec (Map f r) -> Rec (Map g r)
+rxform = rxformc @r (Proxy @Unconstrained1)
 
 type family Map (f :: a -> b) (r :: Row a) :: Row b where Map f (R r) = R (RM f r)
 
@@ -396,6 +400,7 @@ instance Forall (R '[]) c where
   eraseToHashMap _ _ _ = M.empty
   eraseZip _ _ _ _ = []
   rmapc _ _ _ = empty
+  rxformc _ _ _ = empty
 
 instance (KnownSymbol l, Forall (R t) c, c a) => Forall (R (l :-> a ': t)) c where
   rinit c f = unsafeInjectFront l f (rinit c f) where l = Label :: Label l
@@ -413,6 +418,10 @@ instance (KnownSymbol l, Forall (R t) c, c a) => Forall (R (l :-> a ': t)) c whe
 
   rmapc :: ∀ f . Proxy c -> (forall a. c a => a -> f a) -> Rec (R (l :-> a ': t)) -> Rec (Map f (R (l :-> a ': t)))
   rmapc c f r = unsafeInjectFront l (f (r .! l)) (rmapc @_ @_ @f c f (r .- l))
+    where l = Label :: Label l
+
+  rxformc :: ∀ f g . Proxy c -> (forall a. c a => f a -> g a) -> Rec (Map f (R (l :-> a ': t))) -> Rec (Map g (R (l :-> a ': t)))
+  rxformc c f r = unsafeInjectFront l (f (r .! l)) (rxformc @(R t) @_ @f @g c f (r .- l))
     where l = Label :: Label l
 
 show' :: (IsString s, Show a) => a -> s
