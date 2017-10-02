@@ -364,6 +364,9 @@ class Forall (r :: Row *) (c :: * -> Constraint) where
   erase    :: Proxy c -> (forall a. c a => a -> b) -> Rec r -> [b]
   erase proxy f = fmap (snd @String) . eraseWithLabels proxy f
   eraseWithLabels :: IsString s => Proxy c -> (forall a. c a => a -> b) -> Rec r -> [(s, b)]
+  eraseFold :: Monoid b => Proxy c -> (forall a. c a => a -> b) -> Rec r -> b
+  eraseFold proxy f = eraseFoldWithLabels proxy (pure f)
+  eraseFoldWithLabels :: Monoid b => Proxy c -> (forall l a. (KnownSymbol l, c a) => Label l -> a -> b) -> Rec r -> b
   eraseToHashMap :: (IsString s, Eq s, Hashable s) =>
                     Proxy c -> (forall a . c a => a -> b) -> Rec r -> HashMap s b
   -- | Given a function @(a -> a -> b)@ where @a@ can be instantiated to each type of the row,
@@ -426,6 +429,7 @@ instance Forall (R '[]) c where
   rinit _ _ = empty
   rinitAWithLabel _ _ = pure empty
   eraseWithLabels _ _ _ = []
+  eraseFoldWithLabels _ _ _ = mempty
   eraseToHashMap _ _ _ = M.empty
   eraseZip _ _ _ _ = []
 
@@ -436,6 +440,9 @@ instance (KnownSymbol l, Forall (R t) c, c a) => Forall (R (l :-> a ': t)) c whe
 
   eraseWithLabels c f r =
     (show' l, f (r .! l)) : eraseWithLabels c f (r .- l) where l = Label :: Label l
+
+  eraseFoldWithLabels c f r =
+    f l (r .! l) `mappend` eraseFoldWithLabels c f (r .- l) where l = Label :: Label l
 
   eraseToHashMap c f r =
     M.insert (show' l) (f (r .! l)) $ eraseToHashMap c f (r .- l) where l = Label :: Label l
